@@ -1,0 +1,7 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* お好み：ダーク基調 */
+html, body, #root { height: 100%; }
+@layer base { body { @apply bg-backBlack text-textWhite; } }
