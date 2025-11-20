@@ -6,11 +6,11 @@ const router = express.Router();
 // A: GET list
 router.get("/", entryController.getAllEntries);
 
-// C: GET one
-router.get("/:id", entryController.getEntryById);
-
 // B: POST create
 router.post("/", entryController.postEntry);
+
+// C: GET one
+router.get("/:id", entryController.getEntryById);
 
 // D: PUT full update
 router.put("/:id", entryController.putEntry);
