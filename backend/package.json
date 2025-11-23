@@ -6,11 +6,13 @@
     "type": "module",
     "scripts": {
         "dev": "nodemon src/app.js",
-        "start": "node src/app.js"
+        "start": "node src/index.js"
     },
     "dependencies": {
         "dotenv": "^16.6.1",
         "express": "^4.19.2",
-        "pg": "^8.11.3"
+        "pg": "^8.11.3",
+        "swagger-jsdoc": "^6.2.8",
+        "swagger-ui-express": "^5.0.1"
     }
 }

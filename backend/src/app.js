@@ -1,22 +1,26 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
-import { connectDB } from "./db/index.js";
+import { connectDB } from "./v1/db/index.js";
 
-import emotionRoutes from "./routes/emotionRoutes.js";
-import entryRoutes from "./routes/entryRoutes.js";
+import entryRoutes from "./v1/routes/entryRoutes.js";
+import emotionRoutes from "./v1/routes/emotionRoutes.js";
+
+
+dotenv.config();
 
 const app = express();
 app.use(express.json());
 
-await connectDB();
+// DB
+connectDB();
 
-app.use("/emotions", emotionRoutes);
-app.use("/entries", entryRoutes);
+// v1 API
+app.use("/api/v1/entries", entryRoutes);
+app.use("/api/v1/emotions", emotionRoutes);
 
-app.get("/", (req, res) => {
-    res.send("JewelNotes API running.");
+// Health check
+app.get("/health", (req, res) => {
+    res.json({ status: "ok" });
 });
 
-app.listen(3000, () => {
-    console.log("Server running on http://localhost:3000");
-});
+export default app;

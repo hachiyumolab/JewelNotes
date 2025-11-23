@@ -3,22 +3,37 @@ import * as entryController from "../controllers/entryController.js";
 
 const router = express.Router();
 
-// A: GET list
+/**
+ * @swagger
+ * tags:
+ *   name: Entries
+ *   description: Entry management
+ *
+ * /api/v1/entries:
+ *   get:
+ *     summary: Get all entries
+ *     tags: [Entries]
+ *     responses:
+ *       200:
+ *         description: List of entries
+ */
+
+// GET all
 router.get("/", entryController.getAllEntries);
 
-// B: POST create
+// POST create
 router.post("/", entryController.postEntry);
 
-// C: GET one
+// GET one
 router.get("/:id", entryController.getEntryById);
 
-// D: PUT full update
+// PUT full update
 router.put("/:id", entryController.putEntry);
 
-// E: PATCH partial update
+// PATCH partial update
 router.patch("/:id", entryController.patchEntry);
 
-// F: DELETE
+// DELETE
 router.delete("/:id", entryController.deleteEntry);
 
 export default router;
