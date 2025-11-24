@@ -7,7 +7,7 @@ const router = express.Router();
  * @swagger
  * tags:
  *   name: Entries
- *   description: Entry management
+ *   description: Entry Management
  *
  * /api/v1/entries:
  *   get:
