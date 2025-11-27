@@ -7,6 +7,8 @@ import { swaggerDocs } from "./swagger.js";
 import entryRoutes from "./v1/routes/entryRoutes.js";
 import emotionRoutes from "./v1/routes/emotionRoutes.js";
 
+import errorHandler from "./errors/errorHandler.js";
+
 dotenv.config();
 
 const app = express();
