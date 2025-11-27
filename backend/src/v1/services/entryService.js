@@ -1,90 +1,180 @@
 // src/services/entryService.js
+
+/**
+ * Service 層の役割：
+ * ------------------------------------------
+ * - DB に対する CRUD 処理を実行する
+ * - "業務ロジック" をここで判断する
+ * - Controller に返す前に「正常/異常」をここで確定させる
+ * - 異常は ApiError を使って例外として投げる
+ * 
+ * Controller は判断しない
+ *   → 正常データを受け取って res.json に流すだけ
+ *   → エラーは next(err) に渡すだけ
+ * 
+ * errorHandler が JSON エラー形式を作る
+ */
+
 import { db } from "../db/index.js";
+import ApiError from "../errors/ApiError.js";
 
-/* A: List entries */
+/* ===========================================================
+ * A: List entries
+ * =========================================================== */
 export async function listEntries() {
-    const query = `
-        SELECT entry_id, user_id, body, entry_datetime_utc, created_at, updated_at
-        FROM trn.trn_entry
-        ORDER BY entry_id DESC
-    `;
-    const result = await db.query(query);
-    return result.rows;
+  const query = `
+    SELECT entry_id, user_id, body, entry_datetime_utc, created_at, updated_at
+    FROM trn.trn_entry
+    ORDER BY entry_id DESC
+  `;
+
+  // DBエラーは全て errorHandler に流れる
+  const result = await db.query(query);
+  return result.rows; // [] の場合はそのまま返す（正常）
 }
 
-/* B: Create entry */
+
+/* ===========================================================
+ * B: Create entry
+ * =========================================================== */
 export async function createEntry(data) {
-    const query = `
-        INSERT INTO trn.trn_entry (user_id, body, entry_datetime_utc)
-        VALUES ($1, $2, NOW())
-        RETURNING *
-    `;
-    const result = await db.query(query, [1, data.body]);
-    return result.rows[0];
+  // 入力チェック（Zod導入前なので最低限）
+  if (!data?.body || typeof data.body !== "string") {
+    throw ApiError.badRequest("body is required");
+  }
+
+  const query = `
+    INSERT INTO trn.trn_entry (user_id, body, entry_datetime_utc)
+    VALUES ($1, $2, NOW())
+    RETURNING *
+  `;
+
+  const result = await db.query(query, [1, data.body]);
+  return result.rows[0]; // 作成されたデータ
 }
 
-/* C: Get one */
+
+/* ===========================================================
+ * C: Get one
+ * =========================================================== */
 export async function getEntry(id) {
-    const query = `
-        SELECT *
-        FROM trn.trn_entry
-        WHERE entry_id = $1
-    `;
-    const result = await db.query(query, [id]);
-    return result.rows[0];
+  // ID が数値でない場合
+  if (!Number.isInteger(id)) {
+    throw ApiError.badRequest("Invalid entry ID");
+  }
+
+  const query = `
+    SELECT *
+    FROM trn.trn_entry
+    WHERE entry_id = $1
+  `;
+
+  const result = await db.query(query, [id]);
+  const row = result.rows[0];
+
+  if (!row) {
+    // Service 層が 404 の責務を持つ
+    throw ApiError.notFound("Entry not found");
+  }
+
+  return row;
 }
 
-/* D: Full update (PUT) */
+
+/* ===========================================================
+ * D: Full update (PUT)  ※完全上書き
+ * =========================================================== */
 export async function updateEntryFull(id, data) {
-    const query = `
-        UPDATE trn.trn_entry
-        SET
-            body = $1,
-            updated_at = NOW()
-        WHERE entry_id = $2
-        RETURNING *
-    `;
-    const result = await db.query(query, [data.body, id]);
-    return result.rows[0];
+  if (!Number.isInteger(id)) {
+    throw ApiError.badRequest("Invalid entry ID");
+  }
+  if (!data?.body) {
+    throw ApiError.badRequest("body is required");
+  }
+
+  const query = `
+    UPDATE trn.trn_entry
+    SET body = $1,
+        updated_at = NOW()
+    WHERE entry_id = $2
+    RETURNING *
+  `;
+
+  const result = await db.query(query, [data.body, id]);
+  const row = result.rows[0];
+
+  if (!row) {
+    throw ApiError.notFound("Entry not found");
+  }
+
+  return row;
 }
 
-/* E: Partial update (PATCH) */
+
+/* ===========================================================
+ * E: Partial update (PATCH)
+ * =========================================================== */
 export async function updateEntryPartial(id, data) {
-    const fields = [];
-    const values = [];
-    let idx = 1;
+  if (!Number.isInteger(id)) {
+    throw ApiError.badRequest("Invalid entry ID");
+  }
 
-    // 動的に更新フィールドを組み立てる
-    for (const [key, value] of Object.entries(data)) {
-        fields.push(`${key} = $${idx}`);
-        values.push(value);
-        idx++;
-    }
+  const fields = [];
+  const values = [];
+  let idx = 1;
 
-    // 更新対象が一つもなければ null を返す
-    if (fields.length === 0) return null;
+  for (const [key, value] of Object.entries(data)) {
+    fields.push(`${key} = $${idx}`);
+    values.push(value);
+    idx++;
+  }
 
-    const query = `
-        UPDATE trn.trn_entry
-        SET ${fields.join(", ")},
-            updated_at = NOW()
-        WHERE entry_id = $${idx}
-        RETURNING *
-    `;
+  // 更新データが空なら 400
+  if (fields.length === 0) {
+    throw ApiError.badRequest("No fields to update");
+  }
 
-    values.push(id);
+  const query = `
+    UPDATE trn.trn_entry
+    SET ${fields.join(", ")},
+        updated_at = NOW()
+    WHERE entry_id = $${idx}
+    RETURNING *
+  `;
 
-    const result = await db.query(query, values);
-    return result.rows[0];
+  values.push(id);
+
+  const result = await db.query(query, values);
+  const row = result.rows[0];
+
+  if (!row) {
+    throw ApiError.notFound("Entry not found");
+  }
+
+  return row;
 }
 
-/* F: Delete */
+
+/* ===========================================================
+ * F: Delete
+ * =========================================================== */
 export async function deleteEntry(id) {
-    const query = `
-        DELETE FROM trn.trn_entry
-        WHERE entry_id = $1
-        RETURNING *
-    `;
-    const result = await db.query(query, [id]);
-    return result.rows[0];
+  if (!Number.isInteger(id)) {
+    throw ApiError.badRequest("Invalid entry ID");
+  }
+
+  const query = `
+    DELETE FROM trn.trn_entry
+    WHERE entry_id = $1
+    RETURNING *
+  `;
+
+  const result = await db.query(query, [id]);
+  const row = result.rows[0];
+
+  if (!row) {
+    throw ApiError.notFound("Entry not found");
+  }
+
+  return true; // Controller は {success: true} を返す
 }
