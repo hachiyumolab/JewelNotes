@@ -12,6 +12,16 @@
  *  → 業務ルールの判断は Service 層が担当
  *  → エラーの形を統一するのは errorHandler.js が担当
  *  → Controller はテクニカル層（I/O担当）なので責務を持たない
+ *
+ * A-3 成功レスポンス統一ルール：
+ * -------------------------------------
+ * {
+ *   "status": "success",
+ *   "data": ... または "message": ...
+ * }
+ * 
+ * エラーは ApiError → next(err) → errorHandler に流すので
+ * ここでは「成功レスポンスの形」だけ統一すればOK。
  */
 
 import * as entryService from "../services/entryService.js";
@@ -22,16 +32,25 @@ import * as entryService from "../services/entryService.js";
  * =========================================================== */
 export async function getAllEntries(req, res, next) {
     try {
-        // Service 層へデータ取得の指示
+        // Service 層へ「全件取得」の処理を依頼
         const entries = await entryService.listEntries();
 
-        // 正常時 → 直接レスポンス
-        res.json(entries);
+        /**
+         * A-3 成功レスポンス統一仕様：
+         * {
+         *   "status": "success",
+         *   "data": [...]
+         * }
+         */
+        res.json({
+            status: "success",
+            data: entries,
+        });
 
     } catch (err) {
         /**
-         * catch ではレスポンスを返さない
-         * next(err) を呼ぶことで errorHandler.js に処理を委譲する
+         * ここではレスポンスを返さない。
+         * next(err) を呼ぶ → errorHandler.js が最終レスポンスを担当。
          */
         next(err);
     }
@@ -39,22 +58,21 @@ export async function getAllEntries(req, res, next) {
 
 /* ===========================================================
  * C: GET /entries/:id
- * 単一エントリの取得
+ * 単一エントリ取得
  * =========================================================== */
 export async function getEntryById(req, res, next) {
     try {
-        // URL パラメータを数値にキャスト
+        // URLの :id を数値に変換（DBは数値型を要求する）
         const id = Number(req.params.id);
 
-        // 取得処理
+        // Service 層で 404 判定 & ApiError 投げが行われる
         const entry = await entryService.getEntry(id);
 
-        /**
-         * Service 層がデータ無しを ApiError.notFound() として投げれば、
-         * Controller はここに来ず errorHandler に流れる。
-         * よって Controller では 404 判定をしない。
-         */
-        res.json(entry);
+        // 成功レスポンス仕様（A-3）
+        res.json({
+            status: "success",
+            data: entry,
+        });
 
     } catch (err) {
         next(err);
@@ -67,11 +85,17 @@ export async function getEntryById(req, res, next) {
  * =========================================================== */
 export async function postEntry(req, res, next) {
     try {
-        // body データを渡して新規作成
+        // Service 層に作成処理を依頼
         const entry = await entryService.createEntry(req.body);
 
-        // 201 Created で返す
-        res.status(201).json(entry);
+        /**
+         * 201 Created を返す。
+         * A-3 成功レスポンス構造を適用。
+         */
+        res.status(201).json({
+            status: "success",
+            data: entry,
+        });
 
     } catch (err) {
         next(err);
@@ -87,10 +111,13 @@ export async function putEntry(req, res, next) {
         const id = Number(req.params.id);
         const data = req.body;
 
+        // データ無しなら Service 層が ApiError.notFound を throw
         const updated = await entryService.updateEntryFull(id, data);
 
-        // updateEntryFull もデータ無しなら ApiError.notFound を投げる
-        res.json(updated);
+        res.json({
+            status: "success",
+            data: updated,
+        });
 
     } catch (err) {
         next(err);
@@ -99,7 +126,7 @@ export async function putEntry(req, res, next) {
 
 /* ===========================================================
  * E: PATCH /entries/:id
- * 一部更新
+ * 一部フィールドの部分更新
  * =========================================================== */
 export async function patchEntry(req, res, next) {
     try {
@@ -108,7 +135,10 @@ export async function patchEntry(req, res, next) {
 
         const updated = await entryService.updateEntryPartial(id, data);
 
-        res.json(updated);
+        res.json({
+            status: "success",
+            data: updated,
+        });
 
     } catch (err) {
         next(err);
@@ -123,10 +153,21 @@ export async function deleteEntry(req, res, next) {
     try {
         const id = Number(req.params.id);
 
+        // 削除処理。見つからなければ ApiError.notFound が飛ぶ。
         await entryService.deleteEntry(id);
 
-        // 削除成功 → boolean ではなく成功メッセージ
-        res.json({ success: true });
+        /**
+         * DELETE は data ではなく message を返す。
+         * 成功レスポンス統一仕様：
+         * {
+         *   "status": "success",
+         *   "message": "deleted"
+         * }
+         */
+        res.json({
+            status: "success",
+            message: "deleted",
+        });
 
     } catch (err) {
         next(err);
