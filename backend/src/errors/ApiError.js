@@ -5,11 +5,11 @@
  * - Service や Controller 層で throw して使う
  * - statusCode（HTTPコード）と message を必ず持つ
  * - 原因となるエラー (cause) も保持できる
- * 
+ *
  * これを使うことで：
  * - バラバラなエラーメッセージを統一できる
  * - errorHandler.js による共通レスポンス処理が可能になる
- * 
+ *
  * Node.js の Error クラスを継承しているので、通常の throw に完全対応。
  */
 export default class ApiError extends Error {

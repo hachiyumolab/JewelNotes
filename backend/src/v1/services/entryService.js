@@ -7,16 +7,16 @@
  * - "業務ロジック" をここで判断する
  * - Controller に返す前に「正常/異常」をここで確定させる
  * - 異常は ApiError を使って例外として投げる
- * 
+ *
  * Controller は判断しない
  *   → 正常データを受け取って res.json に流すだけ
  *   → エラーは next(err) に渡すだけ
- * 
+ *
  * errorHandler が JSON エラー形式を作る
  */
 
 import { db } from "../db/index.js";
-import ApiError from "../errors/ApiError.js";
+import ApiError from "../../errors/ApiError.js";
 
 /* ===========================================================
  * A: List entries
