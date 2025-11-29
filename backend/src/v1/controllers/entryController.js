@@ -1,174 +1,160 @@
+// -------------------------------------------------------------
 // src/controllers/entryController.js
+// -------------------------------------------------------------
+// これは API の「入口」を担当する層。
+// Controller の責務は以下の4つだけ：
+//
+//   (1) HTTPリクエストを受け取る（params / query / body）
+//   (2) バリデーションが必要ならここで呼ぶ（Zod）
+//   (3) ビジネスロジックは Service 層に丸投げする
+//   (4) 最終レスポンスを返す
+//
+// ⚠ Controller は DBアクセスやビジネスルールを持たない。
+//    必ず Service 層に処理を渡すこと。
+// -------------------------------------------------------------
 
-/**
- * Controller 層の役割：
- * ------------------------------------------
- * - HTTP リクエスト（パラメータ/Body）を受け取る
- * - Service 層に処理を依頼する
- * - 結果を JSON として返す
- * - エラーは判断しない。catch で next(err) に渡すだけ
- *
- * なぜ判断しないのか？
- *  → 業務ルールの判断は Service 層が担当
- *  → エラーの形を統一するのは errorHandler.js が担当
- *  → Controller はテクニカル層（I/O担当）なので責務を持たない
- *
- * A-3 成功レスポンス統一ルール：
- * -------------------------------------
- * {
- *   "status": "success",
- *   "data": ... または "message": ...
- * }
- * 
- * エラーは ApiError → next(err) → errorHandler に流すので
- * ここでは「成功レスポンスの形」だけ統一すればOK。
- */
-
+// Service 層（DB操作 + 業務ロジック）を読み込み
 import * as entryService from "../services/entryService.js";
 
-/* ===========================================================
- * A: GET /entries
- * 全エントリ取得
- * =========================================================== */
+// Zod のバリデーション関数を読み込み
+// パスは「controllers → src → validators」なので ../validators が正解
+import {
+    validateEntryCreate,
+    validateEntryUpdateFull,
+    validateEntryUpdatePartial,
+    validateId,
+} from "../../validators/entryValidator.js";
+
+
+// ==============================================================
+// A: GET /entries  （全取得）
+// ==============================================================
 export async function getAllEntries(req, res, next) {
     try {
-        // Service 層へ「全件取得」の処理を依頼
+        // Service 層にデータ取得を依頼
         const entries = await entryService.listEntries();
 
-        /**
-         * A-3 成功レスポンス統一仕様：
-         * {
-         *   "status": "success",
-         *   "data": [...]
-         * }
-         */
+        // 統一レスポンス形式
         res.json({
             status: "success",
             data: entries,
         });
-
     } catch (err) {
-        /**
-         * ここではレスポンスを返さない。
-         * next(err) を呼ぶ → errorHandler.js が最終レスポンスを担当。
-         */
         next(err);
     }
 }
 
-/* ===========================================================
- * C: GET /entries/:id
- * 単一エントリ取得
- * =========================================================== */
+
+// ==============================================================
+// C: GET /entries/:id  （単一取得）
+// ==============================================================
 export async function getEntryById(req, res, next) {
     try {
-        // URLの :id を数値に変換（DBは数値型を要求する）
-        const id = Number(req.params.id);
+        // ① id をバリデート（数値/整数/正の数）
+        const id = validateId(req.params.id);
 
-        // Service 層で 404 判定 & ApiError 投げが行われる
+        // ② Service 層で取得（見つからない時は 404 を throw）
         const entry = await entryService.getEntry(id);
 
-        // 成功レスポンス仕様（A-3）
+        // ③ 成功レスポンス
         res.json({
             status: "success",
             data: entry,
         });
-
     } catch (err) {
         next(err);
     }
 }
 
-/* ===========================================================
- * B: POST /entries
- * 新規エントリ作成
- * =========================================================== */
+
+// ==============================================================
+// B: POST /entries  （新規作成）
+// ==============================================================
 export async function postEntry(req, res, next) {
     try {
-        // Service 層に作成処理を依頼
-        const entry = await entryService.createEntry(req.body);
+        // ① リクエストボディを Zod で検証
+        const validatedData = validateEntryCreate(req.body);
 
-        /**
-         * 201 Created を返す。
-         * A-3 成功レスポンス構造を適用。
-         */
+        // ②Service 層に「作成」を依頼
+        const entry = await entryService.createEntry(validatedData);
+
+        // ③ 成功レスポンス（201 Created）
         res.status(201).json({
             status: "success",
             data: entry,
         });
-
     } catch (err) {
         next(err);
     }
 }
 
-/* ===========================================================
- * D: PUT /entries/:id
- * エントリの全更新（上書き）
- * =========================================================== */
+
+// ==============================================================
+// D: PUT /entries/:id  （全更新）
+// ==============================================================
 export async function putEntry(req, res, next) {
     try {
-        const id = Number(req.params.id);
-        const data = req.body;
+        // ① id を Zod で検証
+        const id = validateId(req.params.id);
 
-        // データ無しなら Service 層が ApiError.notFound を throw
-        const updated = await entryService.updateEntryFull(id, data);
+        // ② body 全更新の Zod 検証
+        const validatedData = validateEntryUpdateFull(req.body);
 
+        // ③ 更新処理
+        const updated = await entryService.updateEntryFull(id, validatedData);
+
+        // ④ 統一レスポンス
         res.json({
             status: "success",
             data: updated,
         });
-
     } catch (err) {
         next(err);
     }
 }
 
-/* ===========================================================
- * E: PATCH /entries/:id
- * 一部フィールドの部分更新
- * =========================================================== */
+
+// ==============================================================
+// E: PATCH /entries/:id  （部分更新）
+// ==============================================================
 export async function patchEntry(req, res, next) {
     try {
-        const id = Number(req.params.id);
-        const data = req.body;
+        // ① id 検証
+        const id = validateId(req.params.id);
 
-        const updated = await entryService.updateEntryPartial(id, data);
+        // ② 部分更新の Zod 検証（任意項目 + 型チェック）
+        const validatedData = validateEntryUpdatePartial(req.body);
 
+        // ③ 更新処理
+        const updated = await entryService.updateEntryPartial(id, validatedData);
+
+        // ④ レスポンス
         res.json({
             status: "success",
             data: updated,
         });
-
     } catch (err) {
         next(err);
     }
 }
 
-/* ===========================================================
- * F: DELETE /entries/:id
- * 削除
- * =========================================================== */
+
+// ==============================================================
+// F: DELETE /entries/:id  （削除）
+// ==============================================================
 export async function deleteEntry(req, res, next) {
     try {
-        const id = Number(req.params.id);
+        // ① id 検証
+        const id = validateId(req.params.id);
 
-        // 削除処理。見つからなければ ApiError.notFound が飛ぶ。
+        // ② 削除を依頼
         await entryService.deleteEntry(id);
 
-        /**
-         * DELETE は data ではなく message を返す。
-         * 成功レスポンス統一仕様：
-         * {
-         *   "status": "success",
-         *   "message": "deleted"
-         * }
-         */
+        // ③ メッセージ型レスポンス
         res.json({
             status: "success",
             message: "deleted",
         });
-
     } catch (err) {
         next(err);
     }
